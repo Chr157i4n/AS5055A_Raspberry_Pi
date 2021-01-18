@@ -17,22 +17,25 @@ class AS5055A:
 
     showWarnings = False
 
-    _pin_cs = 25
+    _pin_cs = -1
 
     spi = spidev.SpiDev()
     
-    def __init__(self):
+    def __init__(self, pin_cs, max_speed_hz=10000):
+        print("AS5055A: Init")
+        self._pin_cs = pin_cs
         GPIO.setwarnings(False)
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(self._pin_cs, GPIO.OUT)
 
         self.spi.open(0,0)
-        self.spi.max_speed_hz = 10000000
+        self.spi.max_speed_hz = max_speed_hz
         self.spi.mode = 0b01
         self.spi.lsbfirst = False
         
     def __del__(self):
-        spi.close()
+        print("AS5055A: Deinit")
+        self.spi.close()
         GPIO.cleanup()
 
 
@@ -75,8 +78,10 @@ class AS5055A:
 
         if(self.calculate_parity(result)):
             print("AS5055A: Parity Error")
-        if(result & self._bp_ef):
+            return False
+        if(result & self._bp_ef and self.showWarnings):
             print("AS5055A: Error Occured")
+            #return False
         if(result & self._bp_alarm_low and self.showWarnings):
             print("AS5055A: Alarm Low")
         if(result & self._bp_alarm_high and self.showWarnings):
@@ -89,5 +94,14 @@ class AS5055A:
         return result
 
     def getAngle(self):
-        angle = self.getAngle_bits() * 360 / 4096
-        return angle
+        tries = 0
+        while(True):
+            tries += 1
+            angleBits = self.getAngle_bits()
+            if(angleBits != False):
+                angle = angleBits * 360 / 4096
+                return angle
+            
+            if(tries>=10):
+                print("AS5055A: after 10 tries not valid answer. exiting")
+                raise SystemExit
